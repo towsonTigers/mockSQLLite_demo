@@ -1,0 +1,81 @@
+:root {
+  /* Color */
+  --bg: #0b0d12;
+  --panel: #12151c;
+  --panel-raised: #171b24;
+  --border: #242938;
+  --border-soft: #1b1f2a;
+  --text: #e8eaf0;
+  --text-muted: #7d8698;
+  --text-dim: #4d5566;
+
+  --accent-todo: #ffb454;
+  --accent-progress: #9d8cff;
+  --accent-done: #4fd1ae;
+  --accent-high: #ff6b6b;
+  --accent-cursor: #8cff6b;
+
+  /* Type */
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --font-body: 'Inter', system-ui, sans-serif;
+
+  --radius: 6px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+input,
+textarea,
+select {
+  font-family: inherit;
+}
+
+::selection {
+  background: var(--accent-cursor);
+  color: #0b0d12;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--accent-cursor);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.scrollbar::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+.scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
