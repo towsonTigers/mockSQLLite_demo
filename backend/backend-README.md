@@ -31,10 +31,16 @@ backend/
 │       ├── tasks.js            # /api/tasks CRUD + /api/tasks/stats
 │       └── projects.js         # /api/projects list/create
 └── tests/
-    ├── setup.js              # buildTestContext() — fresh in-memory DB + app per test
-    ├── tasks.test.js         # Tasks API tests
-    ├── projects.test.js      # Projects API tests
-    └── edge-cases.test.js    # validation/edge-case tests
+    ├── setup.js               # buildTestContext() — fresh in-memory DB + app per test
+    ├── tasks.test.js          # Tasks API tests (raw better-sqlite3 layer)
+    ├── projects.test.js       # Projects API tests
+    ├── edge-cases.test.js     # validation/edge-case tests
+    ├── knex-example.test.js   # same schema.sql queried via the Knex query builder
+    ├── drizzle-example.test.js # same schema.sql queried via Drizzle ORM's typed tables
+    ├── faker-example.test.js  # @faker-js/faker generating realistic seed data via the real API
+    ├── snapshot-example.test.js # Jest toMatchSnapshot(), incl. property matchers for volatile fields
+    └── __snapshots__/
+        └── snapshot-example.test.js.snap  # baseline snapshots — delete to force regeneration
 ```
 
 ## Setup
@@ -121,11 +127,16 @@ Runs the full Jest suite in-band (`jest --runInBand`):
 ```
 PASS tests/edge-cases.test.js
 PASS tests/tasks.test.js
+PASS tests/drizzle-example.test.js
+PASS tests/knex-example.test.js
+PASS tests/faker-example.test.js
+PASS tests/snapshot-example.test.js
 PASS tests/projects.test.js
 
-Test Suites: 3 passed, 3 total
-Tests:       39 passed, 39 total
-Time:        ~1.2 s
+Test Suites: 7 passed, 7 total
+Tests:       47 passed, 47 total
+Snapshots:   2 passed, 2 total
+Time:        ~2.5 s
 ```
 
 Each test gets a brand-new, fully isolated **in-memory** SQLite database, built from the
@@ -146,6 +157,20 @@ No file on disk is touched, so running tests never affects `data/taskflow.db`.
   text, cascading deletes, reassigning a task's project, duplicate-project-name
   rejection (exact/case-insensitive/padded), double-deletes, long titles, and Unicode/
   emoji round-tripping.
+- `knex-example.test.js` — the exact same `schema.sql`, queried through the Knex query
+  builder instead of raw SQL: fluent insert/filter, and a cascade-delete check via a
+  real foreign key.
+- `drizzle-example.test.js` — the same schema again, this time through Drizzle ORM's
+  typed table definitions: insert with `.returning()`, and an `eq()`-filtered select.
+  (Note: Drizzle sends every declared column on insert, so columns with a SQL-level
+  `DEFAULT` are either left out of the Drizzle schema or given a matching
+  `.default(sql\`...\`)` — otherwise Drizzle's `NULL` clobbers the SQL default.)
+- `faker-example.test.js` — `@faker-js/faker` generating realistic project/task data
+  (with retry-on-collision against the `UNIQUE COLLATE NOCASE` project name constraint)
+  and verifying `/api/tasks/stats` aggregation matches what was actually inserted.
+- `snapshot-example.test.js` — `toMatchSnapshot()` against real endpoint response shapes,
+  including Jest's property matchers (`expect.any(...)`) to mask out volatile fields
+  like `id` and timestamps so snapshots don't break for the wrong reason.
 
 Other test scripts:
 
@@ -153,3 +178,25 @@ Other test scripts:
 npm run test:watch      # re-run on file changes
 npm run test:verbose    # verbose per-test output
 ```
+
+### Snapshot maintenance
+
+Baseline snapshots live in `tests/__snapshots__/`. If you intentionally change a response
+shape, review the diff Jest shows you, then accept it with:
+
+```bash
+npm test -- -u
+```
+
+Only run `-u` after actually reading the diff — rubber-stamping snapshot updates defeats
+the point of the check.
+
+## New in this revision
+
+Four example test files were added to accompany a talk on the backend's data-layer
+tooling choices — each re-exercises the same `schema.sql`/`src/routes` code the original
+suite covers, just through a different tool, so the comparison is apples-to-apples:
+`knex-example.test.js`, `drizzle-example.test.js`, `faker-example.test.js`, and
+`snapshot-example.test.js`. New devDependencies: `knex`, `drizzle-orm`, and
+`@faker-js/faker` (pinned to v9 — v10 dropped CommonJS support, which this project relies
+on since it's `"type": "commonjs"`).
