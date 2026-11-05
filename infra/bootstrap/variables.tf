@@ -22,6 +22,18 @@ variable "github_repo" {
   default     = "mockSQLLite_demo"
 }
 
+variable "github_owner_id" {
+  description = "Numeric ID of the repo owner (immutable OIDC subject). gh api users/<owner> --jq .id"
+  type        = string
+  default     = "11334406"
+}
+
+variable "github_repo_id" {
+  description = "Numeric ID of the repository (immutable OIDC subject). gh api repos/<owner>/<repo> --jq .id"
+  type        = string
+  default     = "1367596155"
+}
+
 variable "environments" {
   description = "Deployment environments. Each must match a GitHub environment name."
   type        = list(string)

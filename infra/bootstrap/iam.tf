@@ -11,9 +11,18 @@
 # cannot be assumed without an approval.
 # -----------------------------------------------------------------------------
 
+# GitHub issues the subject in one of two formats, depending on repo/org
+# settings: the classic "repo:owner/name:..." or the immutable form that
+# embeds numeric IDs, "repo:owner@<owner_id>/name@<repo_id>:...". The IDs pin
+# trust to this exact repo even if it is renamed or the name is re-used.
+# Both forms are trusted so a settings change on GitHub can't break logins.
 locals {
-  sub_pr   = "repo:${local.repo}:pull_request"
-  sub_main = "repo:${local.repo}:ref:refs/heads/main"
+  sub_prefixes = compact([
+    "repo:${local.repo}",
+    var.github_owner_id != "" && var.github_repo_id != "" ? "repo:${var.github_owner}@${var.github_owner_id}/${var.github_repo}@${var.github_repo_id}" : "",
+  ])
+  sub_pr   = [for p in local.sub_prefixes : "${p}:pull_request"]
+  sub_main = [for p in local.sub_prefixes : "${p}:ref:refs/heads/main"]
 }
 
 data "aws_iam_policy_document" "trust_plan" {
@@ -31,7 +40,7 @@ data "aws_iam_policy_document" "trust_plan" {
     condition {
       test     = "StringEquals"
       variable = "${local.oidc_url}:sub"
-      values   = [local.sub_pr, local.sub_main]
+      values   = concat(local.sub_pr, local.sub_main)
     }
   }
 }
@@ -51,7 +60,7 @@ data "aws_iam_policy_document" "trust_main" {
     condition {
       test     = "StringEquals"
       variable = "${local.oidc_url}:sub"
-      values   = [local.sub_main]
+      values   = local.sub_main
     }
   }
 }
@@ -72,7 +81,7 @@ data "aws_iam_policy_document" "trust_env" {
     condition {
       test     = "StringEquals"
       variable = "${local.oidc_url}:sub"
-      values   = ["repo:${local.repo}:environment:${each.key}"]
+      values   = [for p in local.sub_prefixes : "${p}:environment:${each.key}"]
     }
   }
 }
@@ -160,7 +169,7 @@ resource "aws_iam_role" "apply" {
 
 data "aws_iam_policy_document" "apply" {
   statement {
-    sid     = "ServicesUsedByStack"
+    sid = "ServicesUsedByStack"
     actions = [
       "ec2:*",
       "s3:*",
@@ -179,7 +188,7 @@ data "aws_iam_policy_document" "apply" {
   }
 
   statement {
-    sid     = "IamForProjectResourcesOnly"
+    sid = "IamForProjectResourcesOnly"
     actions = [
       "iam:CreateRole", "iam:DeleteRole", "iam:GetRole", "iam:UpdateRole",
       "iam:TagRole", "iam:UntagRole", "iam:UpdateAssumeRolePolicy",

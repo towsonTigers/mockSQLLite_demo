@@ -1,5 +1,5 @@
 # TaskFlow API image. Built for linux/arm64 in CI (Graviton hosts).
-FROM node:25-bookworm-slim AS deps
+FROM node:22-bookworm-slim AS deps
 WORKDIR /app
 # Toolchain only used if better-sqlite3 has no prebuilt binary for this platform
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ \
@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3 make g+
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund
 
-FROM node:25-bookworm-slim
+FROM node:22-bookworm-slim
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=3001 \
