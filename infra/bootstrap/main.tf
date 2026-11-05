@@ -54,7 +54,7 @@ locals {
   repo         = "${var.github_owner}/${var.github_repo}"
   state_bucket = "${var.project}-tfstate-${local.account_id}"
   oidc_url     = "token.actions.githubusercontent.com"
-  oidc_arn     = var.create_oidc_provider ? aws_iam_openid_connect_provider.github[0].arn : (
+  oidc_arn = var.create_oidc_provider ? aws_iam_openid_connect_provider.github[0].arn : (
     "arn:${local.partition}:iam::${local.account_id}:oidc-provider/${local.oidc_url}"
   )
 }
@@ -117,9 +117,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "tfstate" {
 
 data "aws_iam_policy_document" "tfstate_bucket" {
   statement {
-    sid       = "DenyInsecureTransport"
-    effect    = "Deny"
-    actions   = ["s3:*"]
+    sid     = "DenyInsecureTransport"
+    effect  = "Deny"
+    actions = ["s3:*"]
     resources = [
       aws_s3_bucket.tfstate.arn,
       "${aws_s3_bucket.tfstate.arn}/*",
@@ -169,11 +169,11 @@ resource "aws_ecr_repository" "app" {
 
 resource "aws_ecr_lifecycle_policy" "app" {
   repository = aws_ecr_repository.app.name
-  policy     = jsonencode({
+  policy = jsonencode({
     rules = [{
       rulePriority = 1
       description  = "Keep the most recent ${var.ecr_keep_images} images"
-      selection    = {
+      selection = {
         tagStatus   = "any"
         countType   = "imageCountMoreThan"
         countNumber = var.ecr_keep_images

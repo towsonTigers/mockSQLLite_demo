@@ -160,7 +160,7 @@ resource "aws_iam_role" "apply" {
 
 data "aws_iam_policy_document" "apply" {
   statement {
-    sid     = "ServicesUsedByStack"
+    sid = "ServicesUsedByStack"
     actions = [
       "ec2:*",
       "s3:*",
@@ -179,7 +179,7 @@ data "aws_iam_policy_document" "apply" {
   }
 
   statement {
-    sid     = "IamForProjectResourcesOnly"
+    sid = "IamForProjectResourcesOnly"
     actions = [
       "iam:CreateRole", "iam:DeleteRole", "iam:GetRole", "iam:UpdateRole",
       "iam:TagRole", "iam:UntagRole", "iam:UpdateAssumeRolePolicy",
