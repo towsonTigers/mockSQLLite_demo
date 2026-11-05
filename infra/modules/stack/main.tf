@@ -75,7 +75,7 @@ resource "aws_ssm_parameter" "deploy_config" {
   name        = "${local.param_prefix}/deploy_config"
   description = "Values the deploy workflow needs, so it never reads Terraform state."
   type        = "String"
-  value       = jsonencode({
+  value = jsonencode({
     bucket          = module.static_site.bucket_name
     distribution_id = module.static_site.distribution_id
     instance_id     = module.app_host.instance_id

@@ -126,7 +126,7 @@ resource "aws_ebs_volume" "data" {
   size              = var.data_volume_gb
   type              = "gp3"
   encrypted         = true
-  tags              = {
+  tags = {
     Name   = "${var.name}-data"
     Backup = local.backup_tag
   }
@@ -161,7 +161,7 @@ resource "aws_instance" "app" {
   }
 
   user_data_replace_on_change = true
-  user_data                   = templatefile("${path.module}/user_data.sh.tftpl", {
+  user_data = templatefile("${path.module}/user_data.sh.tftpl", {
     region          = var.region
     volume_id       = local.volume_nodash
     ecr_registry    = split("/", var.ecr_repository_url)[0]
