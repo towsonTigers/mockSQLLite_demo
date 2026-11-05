@@ -48,7 +48,8 @@ describe('Edge cases', () => {
       const project = db.prepare('INSERT INTO projects (name) VALUES (?)').run('P');
       const res = await request(app)
         .post('/api/tasks')
-        .send({ project_id: project.lastInsertRowid, title: '   ' });
+      .send({ project_id: project.lastInsertRowid, title: '   ' });
+//      .send({ project_id: project.lastInsertRowid, title: 'ABC' });
       expect(res.status).toBe(400);
     });
 
@@ -132,6 +133,9 @@ describe('Edge cases', () => {
       const project = db.prepare('INSERT INTO projects (name) VALUES (?)').run('P');
       const payload = "Robert'); DROP TABLE tasks;--";
 
+      const str = { project_id: project.lastInsertRowid, title: payload };
+      //console.log("SQL Injection = " + JSON.stringify(str));
+
       const res = await request(app)
         .post('/api/tasks')
         .send({ project_id: project.lastInsertRowid, title: payload });
@@ -157,7 +161,7 @@ describe('Edge cases', () => {
       expect(list.status).toBe(200);
       expect(list.body.some((t) => t.title === 'Say "hello" to SQL')).toBe(true);
     });
-  });
+  }); 
 
   // ---------------------------------------------------------------
   // 4. Referential integrity & cascades

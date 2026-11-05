@@ -190,13 +190,3 @@ npm test -- -u
 
 Only run `-u` after actually reading the diff — rubber-stamping snapshot updates defeats
 the point of the check.
-
-## New in this revision
-
-Four example test files were added to accompany a talk on the backend's data-layer
-tooling choices — each re-exercises the same `schema.sql`/`src/routes` code the original
-suite covers, just through a different tool, so the comparison is apples-to-apples:
-`knex-example.test.js`, `drizzle-example.test.js`, `faker-example.test.js`, and
-`snapshot-example.test.js`. New devDependencies: `knex`, `drizzle-orm`, and
-`@faker-js/faker` (pinned to v9 — v10 dropped CommonJS support, which this project relies
-on since it's `"type": "commonjs"`).

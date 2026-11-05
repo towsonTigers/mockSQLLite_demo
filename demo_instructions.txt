@@ -1,0 +1,41 @@
+Run tests
+
+1. npm run test:verbose
+2. describe test suite, schema.sql, seed.js, snapshots, drizzle-example, edge-cases, faker-example,
+            knex-example, projects.test
+
+What is?
+ Drizzle - a TypeScript-first ORM where you define tables as JS/TS objects and query them with a typed builder (db.select().from(tasks).where(eq(...))) instead of raw SQL strings.
+ 
+ Faker - a library for generating realistic fake data (names, sentences, companies) rather than a database tool.
+ 
+ Knex - a SQL query builder (not a full ORM) with a fluent API (db('tasks').where({status: 'done'})) that works across many database backends. In your example it points at the same better-sqlite3 engine and same schema.sql, proving you can swap query layers without touching the schema.
+
+Modify tests
+
+3. npx jest edge-cases
+4. npx jest -t "empty and whitespace input" 
+   modify edge-cases.test.js --break/fix ln 51-52, unit test modification
+5. npx jest -t "SQL injection attempts" 
+   show edge-cases.tests.js ln 131
+   modify tasks.js break/fix --break/fix ln 84-101, tasks -REST-API
+   
+Show db.js, schema.sql, seed.js
+
+Run backend server
+
+6. npm run dev
+7. point out /data folder
+
+Run frontend server
+
+8. npm run dev
+9. Backend is 3001, frontend/Vite is 5173 with a proxy already configured between them. Worth one sentence acknowledging this ('frontend proxies /api calls to the backend on 3001') 
+10. click on http://localhost:5173/
+11. open browser
+12. +New task
+13. add a task
+13. curl localhost:3001/api/tasks
+
+
+
