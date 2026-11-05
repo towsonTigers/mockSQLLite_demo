@@ -12,7 +12,7 @@
     "test:verbose": "jest --runInBand --verbose"
   },
   "dependencies": {
-    "better-sqlite3": "^11.3.0",
+    "better-sqlite3": "^13.0.3",
     "cors": "^2.8.5",
     "express": "^4.19.2"
   },
