@@ -78,7 +78,7 @@ jobs:
 
       - name: Comment plan on PR
         if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           TF_ENV: ${{ inputs.env }}
           CHANGES: ${{ steps.plan.outputs.changes }}
