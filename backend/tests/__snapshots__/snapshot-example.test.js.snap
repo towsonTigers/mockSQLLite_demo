@@ -1,4 +1,4 @@
-// Jest Snapshot v1, https://goo.gl/fbAQLP
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
 
 exports[`Snapshot testing the real API response shapes matches the known-good shape of GET /api/tasks/stats 1`] = `
 {

@@ -17,11 +17,11 @@
     "express": "^4.19.2"
   },
   "devDependencies": {
-    "jest": "^29.7.0",
-    "supertest": "^7.0.0",
     "@faker-js/faker": "^9.9.0",
     "drizzle-orm": "^0.45.2",
-    "knex": "^3.3.0"
+    "jest": "^30.5.2",
+    "knex": "^3.3.0",
+    "supertest": "^7.0.0"
   },
   "jest": {
     "testEnvironment": "node",
