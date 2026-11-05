@@ -82,25 +82,25 @@ function createTasksRouter(db) {
       // DROP TABLE tasks; --, not executed as SQL — because it went in through
       // a parameterized ? placeholder rather than string concatenation.
       
-      // const result = db.prepare(`
-      //   INSERT INTO tasks (project_id, title, description, status, priority)
-      //   VALUES (?, ?, ?, ?, ?)
-      // `).run(project_id, trimmedTitle, description, status, priority);
+      const result = db.prepare(`
+        INSERT INTO tasks (project_id, title, description, status, priority)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(project_id, trimmedTitle, description, status, priority);
 
-      // const created = db.prepare('SELECT * FROM tasks WHERE id = ?').get(result.lastInsertRowid);
-      // res.status(201).json(created);
+      const created = db.prepare('SELECT * FROM tasks WHERE id = ?').get(result.lastInsertRowid);
+      res.status(201).json(created);
 
       /*    INSERT INTO tasks (project_id, title, description, status, priority)
       VALUES (1, 'Robert');          -- 5 columns, only 2 values: error
       DROP TABLE tasks;              -- a separate statement
       --', '', 'todo', 'medium')     -- commented out      */ 
 
-      const testDropSql = `INSERT INTO tasks (project_id, title, description, status, priority)
-                         VALUES (${project_id}, '${trimmedTitle}', '${description}', '${status}', '${priority}')`;
+      // const testDropSql = `INSERT INTO tasks (project_id, title, description, status, priority)
+      //                    VALUES (${project_id}, '${trimmedTitle}', '${description}', '${status}', '${priority}')`;
       
-      db.exec(testDropSql);
+      // db.exec(testDropSql);
 
-      res.status(201).json(created);
+      // res.status(201).json(created);
     } catch (err) {
       res.status(400).json({ error: err.message });
     }
