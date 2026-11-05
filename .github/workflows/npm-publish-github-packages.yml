@@ -4,8 +4,14 @@
 name: Node.js Package
 
 on:
-  release:
-    types: [created]
+  push:
+    branches: [main]
+  workflow_dispatch:        # enables manual runs
+    inputs:                 # optional
+      environment:
+        description: "Target env"
+        required: false
+        default: "dev"
 
 jobs:
   build:
