@@ -90,17 +90,10 @@ function createTasksRouter(db) {
       const created = db.prepare('SELECT * FROM tasks WHERE id = ?').get(result.lastInsertRowid);
       res.status(201).json(created);
 
-      /*    INSERT INTO tasks (project_id, title, description, status, priority)
-      VALUES (1, 'Robert');          -- 5 columns, only 2 values: error
-      DROP TABLE tasks;              -- a separate statement
-      --', '', 'todo', 'medium')     -- commented out      */ 
-
+      // DEMO (break): swap the block above for string concatenation to show injection:
       // const testDropSql = `INSERT INTO tasks (project_id, title, description, status, priority)
-      //                    VALUES (${project_id}, '${trimmedTitle}', '${description}', '${status}', '${priority}')`;
-      
+      //   VALUES (${project_id}, '${trimmedTitle}', '${description}', '${status}', '${priority}')`;
       // db.exec(testDropSql);
-
-      // res.status(201).json(created);
     } catch (err) {
       res.status(400).json({ error: err.message });
     }

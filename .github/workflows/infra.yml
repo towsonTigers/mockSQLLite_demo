@@ -1,0 +1,73 @@
+# Infrastructure pipeline
+#   PR             -> static checks, plan dev + prod, plan posted to the PR
+#   push to main   -> plan + apply dev, then plan + apply prod (prod needs approval)
+#   weekday 09:17  -> drift check (plan only; opens an issue on drift)
+#   manual         -> same as push, from main only
+
+name: Infrastructure
+
+on:
+  pull_request:
+    paths:
+      - "infra/**"
+      - ".checkov.yaml"
+      - ".github/workflows/infra.yml"
+      - ".github/workflows/_terraform-env.yml"
+  push:
+    branches: [main]
+    paths:
+      - "infra/**"
+      - ".checkov.yaml"
+      - ".github/workflows/infra.yml"
+      - ".github/workflows/_terraform-env.yml"
+  schedule:
+    - cron: "17 9 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: infra-${{ github.event_name == 'pull_request' && github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  checks:
+    name: fmt + security scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.11"
+          terraform_wrapper: false
+
+      - name: terraform fmt
+        run: terraform fmt -check -recursive -diff infra
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Checkov
+        run: |
+          pip install --quiet "checkov>=3,<4"
+          checkov --directory infra --framework terraform --config-file .checkov.yaml
+
+  dev:
+    needs: checks
+    uses: ./.github/workflows/_terraform-env.yml
+    with:
+      env: dev
+      apply: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+
+  prod:
+    needs: dev
+    uses: ./.github/workflows/_terraform-env.yml
+    with:
+      env: prod
+      apply: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}

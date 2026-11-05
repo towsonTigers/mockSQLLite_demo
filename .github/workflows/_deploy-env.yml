@@ -1,0 +1,151 @@
+# Reusable: release one image tag + matching frontend build to one environment.
+# Reads everything it needs from SSM (/taskflow/<env>/deploy_config), which
+# Terraform writes, so this workflow never needs Terraform state.
+
+name: deploy-env
+
+on:
+  workflow_call:
+    inputs:
+      env:
+        type: string
+        required: true
+      sha:
+        type: string
+        required: true
+      tag:
+        type: string
+        required: true
+
+jobs:
+  deploy:
+    name: deploy (${{ inputs.env }})
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.env }}
+      url: ${{ steps.cfg.outputs.site_url }}
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      ENV_NAME: ${{ inputs.env }}
+      TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha }}
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.DEPLOY_ROLE_ARN }}
+          role-session-name: deploy-${{ inputs.env }}-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Read deploy config
+        id: cfg
+        run: |
+          CFG="$(aws ssm get-parameter --name "/taskflow/$ENV_NAME/deploy_config" --query Parameter.Value --output text)"
+          for k in bucket distribution_id instance_id site_url; do
+            echo "$k=$(jq -r ".$k" <<<"$CFG")" >> "$GITHUB_OUTPUT"
+          done
+          PREV="$(aws ssm get-parameter --name "/taskflow/$ENV_NAME/image_tag" --query Parameter.Value --output text)"
+          echo "previous_tag=$PREV" >> "$GITHUB_OUTPUT"
+          echo "Deploying $TAG to $ENV_NAME (previous: $PREV)"
+
+      # ---------------------------------------------------------------- API
+      - name: Point host at new image
+        run: |
+          aws ssm put-parameter --name "/taskflow/$ENV_NAME/image_tag" \
+            --type String --value "$TAG" --overwrite >/dev/null
+
+      - name: Restart container and wait for health
+        id: restart
+        env:
+          INSTANCE_ID: ${{ steps.cfg.outputs.instance_id }}
+        run: |
+          cat > params.json <<'JSON'
+          {"commands": [
+            "set -e",
+            "systemctl restart taskflow",
+            "for i in $(seq 1 60); do if curl -fsS http://127.0.0.1/api/health; then exit 0; fi; sleep 2; done",
+            "journalctl -u taskflow -n 80 --no-pager",
+            "exit 1"
+          ]}
+          JSON
+          CMD_ID="$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "taskflow deploy $TAG" \
+            --timeout-seconds 600 \
+            --parameters file://params.json \
+            --query Command.CommandId --output text)"
+          echo "SSM command $CMD_ID"
+          # Poll (the built-in waiter gives up after ~100s; a first pull can take longer).
+          STATUS=Pending
+          for _ in $(seq 1 120); do
+            sleep 5
+            STATUS="$(aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+              --query Status --output text 2>/dev/null || echo Pending)"
+            case "$STATUS" in Pending|InProgress|Delayed) continue ;; *) break ;; esac
+          done
+          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+            --query '{Status:Status,Out:StandardOutputContent,Err:StandardErrorContent}' --output yaml
+          echo "SSM status: $STATUS"
+          [ "$STATUS" = "Success" ]
+
+      # ----------------------------------------------------------- Frontend
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: Upload frontend to S3
+        env:
+          BUCKET: ${{ steps.cfg.outputs.bucket }}
+        working-directory: frontend
+        run: |
+          # Hashed assets: cache forever. index.html: always revalidate.
+          aws s3 sync dist "s3://$BUCKET" --delete --exclude index.html \
+            --cache-control "public,max-age=31536000,immutable"
+          aws s3 cp dist/index.html "s3://$BUCKET/index.html" \
+            --cache-control "no-cache" --content-type "text/html; charset=utf-8"
+
+      - name: Invalidate CloudFront
+        env:
+          DIST_ID: ${{ steps.cfg.outputs.distribution_id }}
+        run: |
+          aws cloudfront create-invalidation --distribution-id "$DIST_ID" \
+            --paths "/" "/index.html" --query Invalidation.Id --output text
+
+      # ------------------------------------------------------- Smoke test
+      - name: Smoke test through CloudFront
+        env:
+          SITE_URL: ${{ steps.cfg.outputs.site_url }}
+        run: |
+          curl -fsS --retry 10 --retry-delay 6 --retry-all-errors "$SITE_URL/api/health"
+          echo
+          curl -fsS --retry 5 --retry-delay 6 --retry-all-errors "$SITE_URL/api/projects" | jq 'length'
+          curl -fsS --retry 5 --retry-delay 6 --retry-all-errors -o /dev/null "$SITE_URL/"
+          echo "Deployed $TAG to $SITE_URL" >> "$GITHUB_STEP_SUMMARY"
+
+      # --------------------------------------------------------- Rollback
+      - name: Roll back API on failure
+        if: failure() && steps.cfg.outputs.previous_tag != '' && steps.cfg.outputs.previous_tag != 'bootstrap'
+        env:
+          PREV: ${{ steps.cfg.outputs.previous_tag }}
+          INSTANCE_ID: ${{ steps.cfg.outputs.instance_id }}
+        run: |
+          echo "::warning::Rolling $ENV_NAME back to $PREV"
+          aws ssm put-parameter --name "/taskflow/$ENV_NAME/image_tag" --type String --value "$PREV" --overwrite >/dev/null
+          CMD_ID="$(aws ssm send-command --instance-ids "$INSTANCE_ID" --document-name AWS-RunShellScript \
+            --comment "taskflow rollback $PREV" --parameters 'commands=["systemctl restart taskflow"]' \
+            --query Command.CommandId --output text)"
+          aws ssm wait command-executed --command-id "$CMD_ID" --instance-id "$INSTANCE_ID"

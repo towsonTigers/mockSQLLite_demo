@@ -1,0 +1,123 @@
+# Application release pipeline (never touches Terraform state)
+#   push to main (backend/ or frontend/ changed)
+#     -> tests -> build arm64 image once -> deploy dev -> deploy prod (approval)
+#   manual run with a commit SHA -> redeploy / roll back to that SHA
+
+name: Deploy app
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - ".github/workflows/deploy-app.yml"
+      - ".github/workflows/_deploy-env.yml"
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Commit SHA to deploy (blank = latest main). Use an older SHA to roll back."
+        required: false
+        default: ""
+      skip_prod:
+        description: "Deploy to dev only"
+        type: boolean
+        default: false
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-app
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.sha.outputs.sha }}
+      tag: ${{ steps.sha.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+      - id: sha
+        run: |
+          SHA="$(git rev-parse HEAD)"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "tag=$SHA" >> "$GITHUB_OUTPUT"
+
+  test:
+    # Tests gate new builds of main. A rollback to an older SHA reuses an
+    # image that already passed tests when it was first built.
+    if: ${{ !inputs.sha }}
+    uses: ./.github/workflows/ci.yml
+
+  image:
+    needs: [resolve, test]
+    if: ${{ !cancelled() && needs.resolve.result == 'success' && (needs.test.result == 'success' || needs.test.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.ECR_PUSH_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Image already built?
+        id: exists
+        env:
+          TAG: ${{ needs.resolve.outputs.tag }}
+        run: |
+          if aws ecr describe-images --repository-name taskflow --image-ids imageTag="$TAG" >/dev/null 2>&1; then
+            echo "Image taskflow:$TAG already in ECR, skipping build"
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.exists.outputs.found == 'false'
+        uses: docker/setup-qemu-action@v3
+
+      - if: steps.exists.outputs.found == 'false'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push (linux/arm64)
+        if: steps.exists.outputs.found == 'false'
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          platforms: linux/arm64
+          push: true
+          provenance: false
+          tags: ${{ steps.ecr.outputs.registry }}/taskflow:${{ needs.resolve.outputs.tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy-dev:
+    needs: [resolve, image]
+    if: ${{ !cancelled() && needs.image.result == 'success' }}
+    uses: ./.github/workflows/_deploy-env.yml
+    with:
+      env: dev
+      sha: ${{ needs.resolve.outputs.sha }}
+      tag: ${{ needs.resolve.outputs.tag }}
+
+  deploy-prod:
+    needs: [resolve, deploy-dev]
+    if: ${{ !cancelled() && needs.deploy-dev.result == 'success' && !inputs.skip_prod }}
+    uses: ./.github/workflows/_deploy-env.yml
+    with:
+      env: prod
+      sha: ${{ needs.resolve.outputs.sha }}
+      tag: ${{ needs.resolve.outputs.tag }}

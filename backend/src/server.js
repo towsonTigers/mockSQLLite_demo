@@ -4,7 +4,7 @@ const { createDb } = require('./db');
 const { seed } = require('./seed');
 const { createApp } = require('./app');
 
-const DB_PATH = path.join(__dirname, '..', 'data', 'taskflow.db');
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'taskflow.db');
 const PORT = process.env.PORT || 3001;
 
 fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });

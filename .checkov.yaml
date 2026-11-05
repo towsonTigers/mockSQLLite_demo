@@ -1,0 +1,38 @@
+# Checkov config used by .github/workflows/infra.yml.
+# Every skip below is a deliberate decision for a low-cost, single-host demo
+# app. Revisit the "hardening" group before storing sensitive data.
+compact: true
+quiet: true
+skip-check:
+  # --- False positive -------------------------------------------------------
+  - CKV_AWS_260   # port 80 ingress is from the CloudFront prefix list, not 0.0.0.0/0
+
+  # --- By design --------------------------------------------------------------
+  - CKV_AWS_88    # instance needs a public IP: CloudFront origin + no NAT gateway
+  - CKV_AWS_174   # default *.cloudfront.net cert forces TLSv1 minimum; set domain_aliases + ACM to get TLSv1.2_2021
+  - CKV2_AWS_34   # SSM params hold an image tag and resource IDs, not secrets
+  - CKV_AWS_26    # CloudWatch alarms cannot publish to SNS topics encrypted with alias/aws/sns
+  - CKV_AWS_107   # apply role: broad service actions by design; IAM writes limited to taskflow-* (see bootstrap/iam.tf)
+  - CKV_AWS_108
+  - CKV_AWS_109
+  - CKV_AWS_111
+  - CKV_AWS_356
+  - CKV_AWS_21    # site bucket holds rebuildable build output; no versioning needed
+  - CKV2_AWS_61   # site bucket: no lifecycle needed (sync --delete keeps it clean)
+
+  # --- Hardening deferred (cost / complexity), see infra/README.md ------------
+  - CKV_AWS_145   # S3 SSE-KMS (SSE-S3 used)
+  - CKV_AWS_189   # EBS customer-managed KMS key (AWS-managed key used)
+  - CKV_AWS_136   # ECR KMS encryption (AES256 used)
+  - CKV_AWS_158   # CloudWatch Logs KMS encryption
+  - CKV_AWS_338   # log retention >= 1 year
+  - CKV_AWS_18    # S3 access logging
+  - CKV_AWS_144   # S3 cross-region replication
+  - CKV2_AWS_62   # S3 event notifications
+  - CKV_AWS_86    # CloudFront access logging
+  - CKV_AWS_68    # CloudFront WAF (pass web_acl_arn to enable)
+  - CKV2_AWS_47   # WAF Log4j rule (no WAF yet; app is Node, not Java)
+  - CKV_AWS_310   # CloudFront origin failover (single origin host)
+  - CKV_AWS_374   # CloudFront geo restriction
+  - CKV2_AWS_11   # VPC flow logs
+  - CKV_AWS_126   # EC2 detailed monitoring

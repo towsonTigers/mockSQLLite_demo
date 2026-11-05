@@ -164,3 +164,12 @@ you the truth."*
 these exact numbers are asserted in `tests/tasks.test.js` (`GET /api/tasks/stats`), so
 if you tweak the seed data for the demo, update that test too (or better: use it as a
 live example of a test breaking for the *right* reason).
+
+## Deploying to AWS
+
+Infrastructure is defined in Terraform under [`infra/`](infra/README.md), and GitHub Actions deploys it:
+
+- `infra.yml`: plans on PRs, applies dev on merge, applies prod after approval
+- `deploy-app.yml`: builds the arm64 API image, then releases to dev and to prod (prod after approval)
+
+One-time setup and day-2 operations are in [infra/README.md](infra/README.md).

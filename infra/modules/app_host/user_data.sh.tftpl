@@ -1,0 +1,92 @@
+#!/bin/bash
+# TaskFlow host bootstrap (Amazon Linux 2023, arm64). Runs once, on first boot.
+# Terraform template: $${...} below is a literal bash expansion.
+set -euo pipefail
+exec > >(tee -a /var/log/taskflow-bootstrap.log) 2>&1
+
+REGION="${region}"
+DEVICE_LINK="/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_${volume_id}"
+MOUNT_POINT="/srv/taskflow/data"
+
+echo "== installing docker"
+dnf install -y docker
+systemctl enable --now docker
+
+echo "== waiting for data volume $DEVICE_LINK"
+for _ in $(seq 1 120); do
+  [ -e "$DEVICE_LINK" ] && break
+  sleep 5
+done
+if [ ! -e "$DEVICE_LINK" ]; then
+  echo "data volume was never attached" >&2
+  exit 1
+fi
+DEVICE="$(readlink -f "$DEVICE_LINK")"
+
+# Format only if the volume is blank (first ever boot). A volume restored from
+# a snapshot, or re-attached after instance replacement, keeps its data.
+if ! blkid "$DEVICE" >/dev/null 2>&1; then
+  echo "== formatting new data volume $DEVICE"
+  mkfs.ext4 -L taskflow-data "$DEVICE"
+fi
+
+mkdir -p "$MOUNT_POINT"
+UUID="$(blkid -s UUID -o value "$DEVICE")"
+if ! grep -q "$UUID" /etc/fstab; then
+  echo "UUID=$UUID $MOUNT_POINT ext4 defaults,nofail,noatime 0 2" >> /etc/fstab
+fi
+systemctl daemon-reload
+mount -a
+chown 1000:1000 "$MOUNT_POINT"   # uid of the "node" user inside the image
+
+echo "== installing taskflow service"
+cat > /usr/local/bin/taskflow-run <<'SCRIPT'
+#!/bin/bash
+# Pulls the image tag currently recorded in SSM and runs it in the foreground.
+set -euo pipefail
+TAG="$(aws ssm get-parameter --region "${region}" --name "${image_tag_param}" \
+  --query Parameter.Value --output text)"
+if [ "$TAG" = "bootstrap" ]; then
+  echo "No image has been deployed yet (image_tag=bootstrap); nothing to run."
+  exit 0
+fi
+aws ecr get-login-password --region "${region}" \
+  | docker login --username AWS --password-stdin "${ecr_registry}"
+docker pull "${ecr_repository}:$TAG"
+docker rm -f taskflow >/dev/null 2>&1 || true
+exec docker run --rm --init --name taskflow \
+  -p 80:3001 \
+  -e DB_PATH=/app/data/taskflow.db \
+  -v /srv/taskflow/data:/app/data \
+  --log-driver awslogs \
+  --log-opt awslogs-region="${region}" \
+  --log-opt awslogs-group="${log_group}" \
+  --log-opt awslogs-stream=api \
+  "${ecr_repository}:$TAG"
+SCRIPT
+chmod 0755 /usr/local/bin/taskflow-run
+
+cat > /etc/systemd/system/taskflow.service <<'UNIT'
+[Unit]
+Description=TaskFlow API container
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+RequiresMountsFor=/srv/taskflow/data
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/taskflow-run
+ExecStop=/usr/bin/docker stop -t 20 taskflow
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+systemctl daemon-reload
+systemctl enable taskflow
+systemctl start taskflow
+echo "== bootstrap complete"
