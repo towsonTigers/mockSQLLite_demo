@@ -12,16 +12,16 @@
     "test:verbose": "jest --runInBand --verbose"
   },
   "dependencies": {
-    "better-sqlite3": "^11.3.0",
+    "better-sqlite3": "^13.0.3",
     "cors": "^2.8.5",
-    "express": "^4.19.2"
+    "express": "^5.3.0"
   },
   "devDependencies": {
     "@faker-js/faker": "^9.9.0",
-    "drizzle-orm": "^0.45.2",
+    "drizzle-orm": "^0.45.4",
     "jest": "^30.5.2",
     "knex": "^3.3.0",
-    "supertest": "^7.0.0"
+    "supertest": "^7.3.1"
   },
   "jest": {
     "testEnvironment": "node",
